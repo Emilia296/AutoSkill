@@ -1698,6 +1698,7 @@ async function sendText(text) {
   const turn = newTurn(text);
   const turnId = turn.id;
   state.inFlight = true;
+  let completed = false;
 
   const sendBtn = el("sendBtn");
   const input = el("chatInput");
@@ -1795,6 +1796,7 @@ async function sendText(text) {
     if (!result || typeof result !== "object") {
       throw new Error("Missing final result from stream.");
     }
+    completed = true;
     applySendResult(result, streamAssistantIndex, turnId);
     // Force a near-immediate extraction event sync after this turn so the right panel can
     // transition to completed/failed without waiting for the next timer tick.
@@ -1834,6 +1836,8 @@ async function sendText(text) {
     if (exportBtn) exportBtn.disabled = false;
     input.focus();
   }
+
+  return completed;
 }
 
 function autoGrowTextarea(textarea) {
@@ -1846,14 +1850,19 @@ function autoGrowTextarea(textarea) {
 }
 
 function bind() {
-  const triggerSend = async (text) => {
+  const triggerSend = async (text, restoreDraftOnFailure = false) => {
     if (state.inFlight) return;
     const t = String(text || "");
     if (!t.trim()) return;
+    let completed = false;
     try {
-      await sendText(t);
+      completed = await sendText(t);
     } catch (e) {
       setStatus(false, String(e?.message || e));
+    }
+    if (restoreDraftOnFailure && !completed && !el("chatInput").value) {
+      el("chatInput").value = t;
+      autoGrowTextarea(el("chatInput"));
     }
   };
 
@@ -1862,7 +1871,7 @@ function bind() {
     if (!t.trim()) return;
     el("chatInput").value = "";
     autoGrowTextarea(el("chatInput"));
-    await triggerSend(t);
+    await triggerSend(t, true);
   });
 
   el("chatInput").addEventListener("keydown", async (ev) => {
